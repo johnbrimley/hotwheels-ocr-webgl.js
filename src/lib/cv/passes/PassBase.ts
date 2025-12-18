@@ -5,7 +5,14 @@ import fullscreenQuadVert from './fullscreen-quad.vert?raw'
 
 
 export abstract class PassBase {
-    public enabled: boolean = true;
+    public get enabled(): boolean {
+        return this.settings.enabled;
+    }
+
+    public set enabled(value: boolean) {
+        this.settings.enabled = value;
+    }
+
     protected quadBufferInfo: twgl.BufferInfo;
     protected constructor(protected gl: WebGL2RenderingContext, public settings: PassSettingsBase) {
         this.quadBufferInfo = twgl.primitives.createXYQuadBufferInfo(gl);

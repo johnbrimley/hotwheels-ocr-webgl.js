@@ -2,34 +2,56 @@
   import { onDestroy, onMount } from 'svelte'
   import { ComputerVisionPipeline } from './lib/cv/ComputerVisionPipeline'
   import { ImageCaptureContext } from './lib/cv/ImageCaptureContext'
+  import { BilateralPass } from './lib/cv/passes/bilateral/BilateralPass'
+  import { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
   import { Rec709LumPass } from './lib/cv/passes/rec-709-luma/Rec709LumaPass'
+  import PassSettingsPanel from './lib/ui/PassSettingsPanel.svelte'
+  import PassTabs from './lib/ui/PassTabs.svelte'
 
   type InputOption = { id: string; label: string }
-
-  type PassControlSpec = {
-    key: string
-    label: string
-    min: number
-    max: number
-    step: number
-    defaultValue: number
-  }
 
   type PassDefinition = {
     id: string
     label: string
+    required: boolean
     create: (gl: WebGL2RenderingContext) => unknown
-    controls: PassControlSpec[]
+    controls: {
+      key: string
+      label: string
+      min: number
+      max: number
+      step: number
+      defaultValue: number
+    }[]
   }
 
-  type PassControlState = PassControlSpec & { value: number }
+  type PassControlState = PassDefinition['controls'][number] & { value: number }
+  type PassUiState = { enabled: boolean; controls: PassControlState[] }
 
   const passDefinitions: PassDefinition[] = [
     {
       id: 'rec709-luma',
       label: 'Rec709 Luma',
+      required: true,
       create: (gl) => new Rec709LumPass(gl),
       controls: [],
+    },
+    {
+      id: 'bilateral',
+      label: 'Bilateral',
+      required: false,
+      create: (gl) => {
+        const settings = new BilateralPassSettings()
+        settings.kernelRadius = 2
+        settings.sigmaSpatial = 2.0
+        settings.sigmaRange = 0.1
+        return new BilateralPass(gl, settings)
+      },
+      controls: [
+        { key: 'u_kernelRadius', label: 'Kernel Radius', min: 1, max: 5, step: 1, defaultValue: 2 },
+        { key: 'u_sigmaSpatial', label: 'Sigma Spatial', min: 0.5, max: 10, step: 0.25, defaultValue: 2.0 },
+        { key: 'u_sigmaRange', label: 'Sigma Range', min: 0.01, max: 0.5, step: 0.01, defaultValue: 0.1 },
+      ],
     },
   ]
 
@@ -50,12 +72,15 @@
   let frontPasses: unknown[] = []
   let rearPasses: unknown[] = []
 
-  let passControlsById: Record<string, PassControlState[]> = Object.fromEntries(
+  let passUiStateById: Record<string, PassUiState> = Object.fromEntries(
     passDefinitions.map((pass) => [
       pass.id,
-      pass.controls.map((c) => ({ ...c, value: c.defaultValue })),
+      {
+        enabled: true,
+        controls: pass.controls.map((c) => ({ ...c, value: c.defaultValue })),
+      },
     ])
-  )
+  ) as Record<string, PassUiState>
 
   let errorMessage: string | null = null
   let running = false
@@ -91,9 +116,16 @@
     const passIndex = passDefinitions.findIndex((p) => p.id === passId)
     if (passIndex < 0) return
 
-    const controls = passControlsById[passId] ?? []
+    const uiState = passUiStateById[passId]
+    const controls = uiState?.controls ?? []
 
     const applyToPass = (pass: any) => {
+      if (typeof uiState?.enabled === 'boolean') {
+        pass.enabled = uiState.enabled
+        if (pass.settings && typeof pass.settings.enabled === 'boolean') {
+          pass.settings.enabled = uiState.enabled
+        }
+      }
       for (const control of controls) {
         pass.settings.uniforms[control.key] = control.value
       }
@@ -103,11 +135,23 @@
     if (rearPasses[passIndex]) applyToPass(rearPasses[passIndex])
   }
 
+  function setPassEnabled(passId: string, enabled: boolean): void {
+    const passDef = passDefinitions.find((p) => p.id === passId)
+    if (!passDef || passDef.required) return
+
+    passUiStateById = {
+      ...passUiStateById,
+      [passId]: { ...passUiStateById[passId], enabled },
+    }
+    applyControlsToPipelines(passId)
+  }
+
   function setControlValue(passId: string, controlKey: string, value: number): void {
-    const controls = passControlsById[passId] ?? []
-    passControlsById = {
-      ...passControlsById,
-      [passId]: controls.map((c) => (c.key === controlKey ? { ...c, value } : c)),
+    const uiState = passUiStateById[passId]
+    const controls = uiState?.controls ?? []
+    passUiStateById = {
+      ...passUiStateById,
+      [passId]: { ...uiState, controls: controls.map((c) => (c.key === controlKey ? { ...c, value } : c)) },
     }
     applyControlsToPipelines(passId)
   }
@@ -183,48 +227,25 @@
 
 <main class="app">
   <section class="controls">
-    <div class="passBar" role="tablist" aria-label="Pipeline passes">
-      {#each passDefinitions as pass (pass.id)}
-        <button
-          type="button"
-          class="passButton"
-          class:passButtonActive={selectedPassId === pass.id}
-          role="tab"
-          aria-selected={selectedPassId === pass.id}
-          on:click={() => (selectedPassId = pass.id)}
-        >
-          {pass.label}
-        </button>
-      {/each}
-    </div>
+    <PassTabs
+      passes={passDefinitions.map((p) => ({ id: p.id, label: p.label }))}
+      {selectedPassId}
+      on:select={(e) => (selectedPassId = e.detail.passId)}
+    />
 
-    <div class="settings" aria-label="Pass settings">
-      {#if selectedPassId && (passControlsById[selectedPassId]?.length ?? 0) > 0}
-        {#each passControlsById[selectedPassId] as control (control.key)}
-          <label class="setting">
-            <div class="settingLabel">{control.label}</div>
-            <div class="settingControl">
-              <input
-                type="range"
-                min={control.min}
-                max={control.max}
-                step={control.step}
-                value={control.value}
-                on:input={(e) =>
-                  setControlValue(
-                    selectedPassId,
-                    control.key,
-                    Number((e.currentTarget as HTMLInputElement).value)
-                  )}
-              />
-              <div class="settingValue">{control.value}</div>
-            </div>
-          </label>
-        {/each}
-      {:else}
-        <div class="settingsEmpty">No settings for this pass.</div>
+    {#if selectedPassId}
+      {@const passDef = passDefinitions.find((p) => p.id === selectedPassId)}
+      {@const uiState = passUiStateById[selectedPassId]}
+      {#if passDef && uiState}
+        <PassSettingsPanel
+          required={passDef.required}
+          enabled={uiState.enabled}
+          controls={uiState.controls.map((c) => ({ ...c, kind: 'slider' as const }))}
+          onEnabledChange={(enabled) => setPassEnabled(selectedPassId, enabled)}
+          onControlChange={(key, value) => setControlValue(selectedPassId, key, value)}
+        />
       {/if}
-    </div>
+    {/if}
   </section>
 
   <section class="views">
@@ -260,7 +281,7 @@
   {/if}
 </main>
 
-<style>
+  <style>
   .app {
     height: 100%;
     width: 100%;
@@ -279,14 +300,14 @@
     gap: 10px;
   }
 
-  .passBar {
+  :global(.passBar) {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
   }
 
-  .passButton {
+  :global(.passButton) {
     background: #1b1b1b;
     color: inherit;
     border: 1px solid rgba(255, 255, 255, 0.14);
@@ -304,7 +325,7 @@
       border-color 120ms ease;
   }
 
-  .passButtonActive {
+  :global(.passButtonActive) {
     transform: translateY(3px);
     box-shadow:
       0 0px 0 rgba(0, 0, 0, 0.65),
@@ -313,7 +334,7 @@
     border-color: rgba(255, 255, 255, 0.22);
   }
 
-  .settings {
+  :global(.settings) {
     display: flex;
     flex-wrap: wrap;
     gap: 12px;
@@ -322,12 +343,12 @@
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   }
 
-  .settingsEmpty {
+  :global(.settingsEmpty) {
     opacity: 0.7;
     padding: 4px 0 12px 0;
   }
 
-  .setting {
+  :global(.setting) {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -335,22 +356,22 @@
     max-width: 320px;
   }
 
-  .settingLabel {
+  :global(.settingLabel) {
     font-size: 12px;
     opacity: 0.8;
   }
 
-  .settingControl {
+  :global(.settingControl) {
     display: flex;
     gap: 10px;
     align-items: center;
   }
 
-  .settingControl input[type='range'] {
+  :global(.settingControl input[type='range']) {
     flex: 1 1 auto;
   }
 
-  .settingValue {
+  :global(.settingValue) {
     width: 64px;
     text-align: right;
     font-variant-numeric: tabular-nums;

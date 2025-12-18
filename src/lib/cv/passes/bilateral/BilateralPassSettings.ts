@@ -13,10 +13,10 @@ export class BilateralPassSettings extends PassSettingsBase {
     public set sigmaRange(value: number) {
         this.uniforms['u_sigmaRange'] = value;
     }
-    public get radius(): number {
-        return this.uniforms['u_radius'];
+    public get kernelRadius(): number {
+        return this.uniforms['u_kernelRadius'];
     }
-    public set radius(value: number) {
-        this.uniforms['u_radius'] = value;
+    public set kernelRadius(value: number) {
+        this.uniforms['u_kernelRadius'] = value;
     }
 }

@@ -3,54 +3,70 @@ precision highp float;
 
 in vec2 v_uv;
 
-uniform sampler2D u_input;   // R8 luma
-uniform vec2 u_texelSize;
+uniform sampler2D u_input;        // R8 luma input
+uniform vec2      u_texelSize;    // 1 / texture resolution
 
-uniform float u_sigmaSpatial;
-uniform float u_sigmaRange;
-uniform int   u_radius;      // must be <= MAX_RADIUS
+uniform float u_sigmaSpatial;     // spatial Gaussian sigma
+uniform float u_sigmaRange;       // range (luma) Gaussian sigma
+uniform int   u_kernelRadius;     // must be <= MAX_KERNEL_RADIUS
 
 out vec4 outColor;
 
-const int MAX_RADIUS = 5;
+const int MAX_KERNEL_RADIUS = 5;
 
 void main() {
+
     vec2 uv = v_uv;
 
-    float center = texture(u_input, uv).r;
+    // Center pixel (luma)
+    float centerLuma = texture(u_input, uv).r;
 
-    float sum = 0.0;
-    float weightSum = 0.0;
+    float weightedSum = 0.0;
+    float weightTotal = 0.0;
 
-    float invSpatial2 = 1.0 / (2.0 * u_sigmaSpatial * u_sigmaSpatial);
-    float invRange2   = 1.0 / (2.0 * u_sigmaRange   * u_sigmaRange);
+    // Precompute inverse variances
+    float invSpatialVar = 1.0 / (2.0 * u_sigmaSpatial * u_sigmaSpatial);
+    float invRangeVar   = 1.0 / (2.0 * u_sigmaRange   * u_sigmaRange);
 
-    for (int y = -MAX_RADIUS; y <= MAX_RADIUS; ++y) {
-        for (int x = -MAX_RADIUS; x <= MAX_RADIUS; ++x) {
+    for (int ky = -MAX_KERNEL_RADIUS; ky <= MAX_KERNEL_RADIUS; ++ky) {
+        for (int kx = -MAX_KERNEL_RADIUS; kx <= MAX_KERNEL_RADIUS; ++kx) {
 
-            // branchless radius mask
-            float mx = step(float(abs(x)), float(u_radius));
-            float my = step(float(abs(y)), float(u_radius));
-            float mask = mx * my;
+            // Branchless kernel mask
+            float maskX = step(float(abs(kx)), float(u_kernelRadius));
+            float maskY = step(float(abs(ky)), float(u_kernelRadius));
+            float kernelMask = maskX * maskY;
 
-            vec2 offset = vec2(float(x), float(y)) * u_texelSize;
-            float sample = texture(u_input, uv + offset).r;
+            vec2 offsetTexel =
+                vec2(float(kx), float(ky)) * u_texelSize;
 
-            float spatialDist2 = float(x * x + y * y);
-            float rangeDist2   = (sample - center) * (sample - center);
+            float neighborLuma =
+                texture(u_input, uv + offsetTexel).r;
 
-            float w =
-                exp(-spatialDist2 * invSpatial2) *
-                exp(-rangeDist2   * invRange2) *
-                mask;
+            float spatialDist2 =
+                float(kx * kx + ky * ky);
 
-            sum       += sample * w;
-            weightSum += w;
+            float rangeDist2 =
+                (neighborLuma - centerLuma) *
+                (neighborLuma - centerLuma);
+
+            float weightSpatial =
+                exp(-spatialDist2 * invSpatialVar);
+
+            float weightRange =
+                exp(-rangeDist2 * invRangeVar);
+
+            float kernelWeight =
+                weightSpatial * weightRange * kernelMask;
+
+            weightedSum += neighborLuma * kernelWeight;
+            weightTotal += kernelWeight;
         }
     }
 
-    // weightSum is guaranteed > 0 because center tap always included
-    float result = sum / weightSum;
+    float filteredLuma = weightedSum / weightTotal;
 
-    outColor = vec4(result, result, result, 1.0);
+    outColor = vec4(filteredLuma,
+                    filteredLuma,
+                    filteredLuma,
+                    1.0);
 }
