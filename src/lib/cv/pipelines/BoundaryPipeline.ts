@@ -3,6 +3,8 @@ import type { PassBase } from '../passes/PassBase'
 import { BilateralPass } from '../passes/bilateral/BilateralPass'
 import { BilateralPassSettings } from '../passes/bilateral/BilateralPassSettings'
 import { Rec709LumPass } from '../passes/rec-709-luma/Rec709LumaPass'
+import { SobelPass } from '../passes/sobel/SobelPass'
+import { SobelPassSettings } from '../passes/sobel/SobelPassSettings'
 
 export type BoundaryPipelinePass = {
   id: string
@@ -27,9 +29,17 @@ export class BoundaryPipeline {
     bilateralSettings.sigmaRange = 0.1
     const bilateral = new BilateralPass(gl, bilateralSettings)
 
+    const sobelSettings = new SobelPassSettings()
+    sobelSettings.kernelRadius = 1
+    sobelSettings.directionBias = 0.0
+    sobelSettings.edgeGain = 1.0
+    sobelSettings.minEdge = 0.0
+    const sobel = new SobelPass(gl, sobelSettings)
+
     this.passes = [
       { id: 'rec709-luma', label: 'Rec709 Luma', required: true, pass: rec709 },
       { id: 'bilateral', label: 'Bilateral', required: false, pass: bilateral },
+      { id: 'sobel', label: 'Sobel', required: false, pass: sobel },
     ]
     this.passMap = new Map(this.passes.map((p) => [p.id, p]))
 

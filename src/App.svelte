@@ -6,6 +6,8 @@
   import BilateralSettings from './lib/ui/settings/BilateralSettings.svelte'
   import Rec709Settings from './lib/ui/settings/Rec709Settings.svelte'
   import type { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
+  import SobelSettings from './lib/ui/settings/SobelSettings.svelte'
+  import type { SobelPassSettings } from './lib/cv/passes/sobel/SobelPassSettings'
   import type { PassBase } from './lib/cv/passes/PassBase'
 
   type InputOption = { id: string; label: string }
@@ -13,6 +15,7 @@
   const passSettingsComponents: Record<string, any> = {
     'rec709-luma': Rec709Settings,
     bilateral: BilateralSettings,
+    sobel: SobelSettings,
   }
 
   let selectedPassId = ''
@@ -138,6 +141,13 @@
             required={passDef.required}
             frontSettings={frontSettings as BilateralPassSettings}
             rearSettings={rearSettings as BilateralPassSettings}
+          />
+        {:else if passDef.id === 'sobel'}
+          <svelte:component
+            this={SettingsComponent}
+            required={passDef.required}
+            frontSettings={frontSettings as SobelPassSettings}
+            rearSettings={rearSettings as SobelPassSettings}
           />
         {:else}
           <svelte:component this={SettingsComponent} />
@@ -267,13 +277,6 @@
 
   :global(.settingControl input[type='range']) {
     flex: 1 1 auto;
-  }
-
-  :global(.settingValue) {
-    width: 64px;
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    opacity: 0.9;
   }
 
   .views {
