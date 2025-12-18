@@ -9,6 +9,8 @@ import { MagnatudeGatePass } from '../passes/magnatude-gate/MagnatudeGatePass'
 import { MagnatudeGatePassSettings } from '../passes/magnatude-gate/MagnatudeGatePassSettings'
 import { TemporalPass } from '../passes/temporal/TemporalPass'
 import { TemporalPassSettings } from '../passes/temporal/TemporalPassSettings'
+import { RayBoxPass } from '../passes/ray-box/RayBoxPass'
+import { RayBoxPassSettings } from '../passes/ray-box/RayBoxPassSettings'
 
 export type BoundaryPipelinePass = {
   id: string
@@ -48,12 +50,20 @@ export class BoundaryPipeline {
     temporalSettings.enabled = true
     const temporal = new TemporalPass(gl, temporalSettings)
 
+    const rayBoxSettings = new RayBoxPassSettings()
+    rayBoxSettings.threshold = 0.12
+    rayBoxSettings.rayCount = 64
+    rayBoxSettings.angleThreshold = 0.35
+    rayBoxSettings.distanceThreshold = 0.5
+    const rayBox = new RayBoxPass(gl, rayBoxSettings)
+
     this.passes = [
       { id: 'rec709-luma', label: 'Rec709 Luma', required: true, pass: rec709 },
       { id: 'bilateral', label: 'Bilateral', required: false, pass: bilateral },
       { id: 'sobel', label: 'Sobel', required: false, pass: sobel },
       { id: 'magnatude-gate', label: 'Magnitude Gate', required: false, pass: magnatudeGate },
       { id: 'temporal', label: 'Temporal Median', required: false, pass: temporal },
+      { id: 'ray-box', label: 'Ray Box', required: false, pass: rayBox },
     ]
     this.passMap = new Map(this.passes.map((p) => [p.id, p]))
 

@@ -12,7 +12,10 @@
   import type { MagnatudeGatePassSettings } from './lib/cv/passes/magnatude-gate/MagnatudeGatePassSettings'
   import TemporalSettings from './lib/ui/settings/TemporalSettings.svelte'
   import type { TemporalPassSettings } from './lib/cv/passes/temporal/TemporalPassSettings'
+  import RayBoxSettings from './lib/ui/settings/RayBoxSettings.svelte'
+  import type { RayBoxPassSettings } from './lib/cv/passes/ray-box/RayBoxPassSettings'
   import type { PassBase } from './lib/cv/passes/PassBase'
+  import FpsCounter from './lib/ui/FpsCounter.svelte'
 
   type InputOption = { id: string; label: string }
 
@@ -22,6 +25,7 @@
     sobel: SobelSettings,
     'magnatude-gate': MagnatudeGateSettings,
     temporal: TemporalSettings,
+    'ray-box': RayBoxSettings,
   }
 
   let selectedPassId = ''
@@ -42,6 +46,7 @@
   let errorMessage: string | null = null
   let running = false
   let frameInFlight = false
+  let fpsCounter: { measure: () => void } | null = null
 
   function refreshInputOptions(): void {
     inputOptions = Array.from(inputContexts.entries()).map(([id, ctx]) => ({
@@ -81,12 +86,14 @@
   async function loop(): Promise<void> {
     if (!running) return
     if (frameInFlight) {
+      fpsCounter?.measure()
       requestAnimationFrame(() => void loop())
       return
     }
 
     frameInFlight = true
     try {
+      fpsCounter?.measure()
       await renderSelected(frontBoundary, selectedFrontInputId)
       await renderSelected(rearBoundary, selectedRearInputId)
       errorMessage = null
@@ -169,6 +176,13 @@
             frontSettings={frontSettings as TemporalPassSettings}
             rearSettings={rearSettings as TemporalPassSettings}
           />
+        {:else if passDef.id === 'ray-box'}
+          <svelte:component
+            this={SettingsComponent}
+            required={passDef.required}
+            frontSettings={frontSettings as RayBoxPassSettings}
+            rearSettings={rearSettings as RayBoxPassSettings}
+          />
         {:else}
           <svelte:component this={SettingsComponent} />
         {/if}
@@ -207,6 +221,7 @@
   {#if errorMessage}
     <div class="errorBanner" role="alert">{errorMessage}</div>
   {/if}
+  <FpsCounter bind:this={fpsCounter} />
 </main>
 
 <style>

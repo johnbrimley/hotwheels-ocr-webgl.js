@@ -10,6 +10,9 @@ out vec4 outColor;
 
 void main() {
     float strength = texture(u_input, v_uv).r;
-    float edge = step(u_threshold, strength);
+
+    // Drop below threshold, preserve magnitude
+    float edge = strength * step(u_threshold, strength);
+
     outColor = vec4(edge, edge, edge, 1.0);
 }

@@ -20,18 +20,35 @@ export class ImageCaptureContext {
     }
 
     static async refreshVideoTracks(): Promise<void> {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const videoTracks = mediaStream.getVideoTracks();
-        for (const track of videoTracks) {
+        // Ensure permission (needed for labels)
+        await navigator.mediaDevices.getUserMedia({ video: true });
+    
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    
+        const activeTrackIds = new Set<string>();
+    
+        for (const device of videoDevices) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { deviceId: { exact: device.deviceId } }
+            });
+    
+            const track = stream.getVideoTracks()[0];
+            activeTrackIds.add(track.id);
+    
             if (!this._imageCaptureContexts.has(track.id)) {
-                const context = new ImageCaptureContext(track);
-                this._imageCaptureContexts.set(track.id, context);
+                this._imageCaptureContexts.set(
+                    track.id,
+                    new ImageCaptureContext(track)
+                );
             }
         }
+    
+        // Remove stale tracks
         for (const [id] of this._imageCaptureContexts) {
-            if (!videoTracks.find(track => track.id === id)) {
+            if (!activeTrackIds.has(id)) {
                 this._imageCaptureContexts.delete(id);
             }
         }
-    }
+    }    
 }
