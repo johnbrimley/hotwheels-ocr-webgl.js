@@ -14,6 +14,8 @@
   import type { TemporalPassSettings } from './lib/cv/passes/temporal/TemporalPassSettings'
   import RayBoxSettings from './lib/ui/settings/RayBoxSettings.svelte'
   import type { RayBoxPassSettings } from './lib/cv/passes/ray-box/RayBoxPassSettings'
+  import OrientationSettings from './lib/ui/settings/OrientationSettings.svelte'
+  import type { OrientationPassSettings } from './lib/cv/passes/orientation/OrientationPassSettings'
   import type { PassBase } from './lib/cv/passes/PassBase'
   import FpsCounter from './lib/ui/FpsCounter.svelte'
   import Toast from './lib/ui/Toast.svelte'
@@ -29,6 +31,7 @@
     'magnatude-gate': MagnatudeGateSettings,
     temporal: TemporalSettings,
     'ray-box': RayBoxSettings,
+    orientation: OrientationSettings,
   }
 
   let selectedPassId = ''
@@ -115,6 +118,10 @@
           settings.threshold = s.threshold
           break
         case 'temporal':
+          break
+        case 'orientation':
+          settings.flipX = s.flipX
+          settings.flipY = s.flipY
           break
         case 'ray-box':
           settings.threshold = s.threshold
@@ -247,6 +254,8 @@
           <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as BilateralPassSettings} />
         {:else if passDef.id === 'sobel'}
           <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as SobelPassSettings} />
+        {:else if passDef.id === 'orientation'}
+          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as OrientationPassSettings} />
         {:else if passDef.id === 'magnatude-gate'}
           <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as MagnatudeGatePassSettings} />
         {:else if passDef.id === 'temporal'}

@@ -3,6 +3,11 @@
     "rec709-luma": {
       "enabled": true
     },
+    "orientation": {
+      "enabled": true,
+      "flipX": true,
+      "flipY": false
+    },
     "bilateral": {
       "enabled": true,
       "kernelRadius": 5,

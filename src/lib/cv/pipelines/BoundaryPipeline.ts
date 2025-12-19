@@ -3,6 +3,8 @@ import type { PassBase } from '../passes/PassBase'
 import { BilateralPass } from '../passes/bilateral/BilateralPass'
 import { BilateralPassSettings } from '../passes/bilateral/BilateralPassSettings'
 import { Rec709LumPass } from '../passes/rec-709-luma/Rec709LumaPass'
+import { OrientationPass } from '../passes/orientation/OrientationPass'
+import { OrientationPassSettings } from '../passes/orientation/OrientationPassSettings'
 import { SobelPass } from '../passes/sobel/SobelPass'
 import { SobelPassSettings } from '../passes/sobel/SobelPassSettings'
 import { MagnatudeGatePass } from '../passes/magnatude-gate/MagnatudeGatePass'
@@ -28,6 +30,11 @@ export class BoundaryPipeline {
     this.pipeline = new ComputerVisionPipeline(gl)
 
     const rec709 = new Rec709LumPass(gl)
+
+    const orientationSettings = new OrientationPassSettings()
+    orientationSettings.flipX = false
+    orientationSettings.flipY = false
+    const orientation = new OrientationPass(gl, orientationSettings)
 
     const bilateralSettings = new BilateralPassSettings()
     bilateralSettings.kernelRadius = 2
@@ -59,6 +66,7 @@ export class BoundaryPipeline {
 
     this.passes = [
       { id: 'rec709-luma', label: 'Rec709 Luma', required: true, pass: rec709 },
+      { id: 'orientation', label: 'Orientation', required: false, pass: orientation },
       { id: 'bilateral', label: 'Bilateral', required: false, pass: bilateral },
       { id: 'sobel', label: 'Sobel', required: false, pass: sobel },
       { id: 'magnatude-gate', label: 'Magnitude Gate', required: false, pass: magnatudeGate },
