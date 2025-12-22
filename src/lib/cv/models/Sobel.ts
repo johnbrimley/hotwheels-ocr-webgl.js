@@ -10,6 +10,9 @@
 export class Sobel {
     public readonly gradientX: number;
     public readonly gradientY: number;
+    public readonly magnitude: number;
+    public readonly gradientVectorX: number;
+    public readonly gradientVectorY: number;
 
     /**
      * @param gradientXHighByte High byte of packed unsigned gradX
@@ -36,5 +39,14 @@ export class Sobel {
 
         this.gradientY =
             (gradientYUnsigned16 / 65535.0) * 2.0 - 1.0;
+
+        this.magnitude =
+            Math.sqrt(this.gradientX * this.gradientX + this.gradientY * this.gradientY);
+
+        this.gradientVectorX =
+            this.magnitude > 0 ? this.gradientX / this.magnitude : 0;
+
+        this.gradientVectorY =
+            this.magnitude > 0 ? this.gradientY / this.magnitude : 0;
     }
 }

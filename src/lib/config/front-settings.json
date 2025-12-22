@@ -18,7 +18,7 @@
       "sigmaRange": 0.1
     },
     "sobel": {
-      "enabled": true,
+      "enabled": false,
       "sigmaSmall": 1.4,
       "sigmaLarge": 2.8
     },
