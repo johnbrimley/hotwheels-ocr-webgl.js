@@ -10,7 +10,7 @@ import { draw } from 'svelte/transition';
 import { type Metadata } from './metadata';
 import { ContinuityScore } from '../../models/ContinuityScore';
 import { DifferenceOfGaussians } from '../../models/DifferenceOfGaussians';
-import { Countdown } from '../../helpers/CountDown';
+import { Countdown } from '../../helpers/Countdown';
 import { ShaderDataConverter } from '../../helpers/ShaderDataConverter';
 import { Histogram } from '../../helpers/Histogram';
 
