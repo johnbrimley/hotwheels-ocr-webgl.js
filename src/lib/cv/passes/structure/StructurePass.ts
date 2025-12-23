@@ -103,25 +103,32 @@ outColor = texture(u_input, v_uv);
 
     private drawJunk(width: number, height: number): void {
         const lumaArray = new Float32Array(this.metadata.length);
-        const best = 
-            this.metadata.slice()
-            .filter((p) => p.score > .1)
-            .sort((a, b) => b.score - b.score);
-        for (let i = 0; i < 50000; i++) {
-            let current = best[i];
-            let count = 100;
-            while (count-- > 0 && current && current.score > .1) {
-                lumaArray[current.index] = 1.0;
-                current = this.metadata[current.nextContinuityScoreIndex!];
-            }
+        for (const meta of this.metadata) {
+            lumaArray[meta.index] = meta.dogPercentile * .999;
+            //lumaArray[meta.index] = meta.magnitude * .999;
+            //lumaArray[meta.index] = meta.continuityScore.score * .999;
+            //lumaArray[meta.index] = meta.score * .999;
         }
+        // const best = 
+        //     this.metadata.slice()
+        //     .filter((p) => p.score > .1)
+        //     .sort((a, b) => b.score - b.score);
+        // for (let i = 0; i < 50000; i++) {
+        //     let current = best[i];
+        //     let count = 100;
+        //     while (count-- > 0 && current && current.score > .1) {
+        //         lumaArray[current.index] = 1.0;
+        //         current = this.metadata[current.nextContinuityScoreIndex!];
+        //     }
+        // }
         this.drawLumaArray(
             this.gl,
             this.debugProgramInfo,
             this.debugRenderTarget,
             width,
             height,
-            lumaArray
+            lumaArray,
+            true
         );
     }
 
@@ -223,12 +230,20 @@ outColor = texture(u_input, v_uv);
                 }
             }
 
+            const dog = ShaderDataConverter.unpackFloat32FromRGBA8(
+                this.dogRGBAData[rgbaIndex + 0],
+                this.dogRGBAData[rgbaIndex + 1],
+                this.dogRGBAData[rgbaIndex + 2],
+                this.dogRGBAData[rgbaIndex + 3]
+            );
+
             this.metadata[i] = {
                 index: i,
                 continuityScore: cs,
                 nextContinuityScoreIndex: nextIndex,
                 magnitude,
-                score: cs.score * magnitude
+                score: cs.score * magnitude,
+                dogPercentile: this.dogHistogram.getValuePercentile(dog)
             };
             // let maxMagnitude = 0;
             // let minMagnitude = Number.POSITIVE_INFINITY;
@@ -285,24 +300,41 @@ outColor = texture(u_input, v_uv);
         renderTarget: RenderTarget2D,
         width: number,
         height: number,
-        luma: Float32Array | number[]
+        luma: Float32Array | number[],
+        showHue: boolean = false
     ) {
-        // 1. Convert luma → RGBA (Uint8)
         const rgba = new Uint8Array(width * height * 4);
-
-        for (let i = 0; i < width * height; i++) {
-            const v = Math.max(0, Math.min(1, luma[i])) * 255;
-            const o = i * 4;
-            rgba[o + 0] = v; // R
-            rgba[o + 1] = v; // G
-            rgba[o + 2] = v; // B
-            rgba[o + 3] = 255; // A
+    
+        if (!showHue) {
+            // -------- Grayscale path --------
+            for (let i = 0; i < width * height; i++) {
+                const v = Math.max(0, Math.min(1, luma[i])) * 255;
+                const o = i * 4;
+                rgba[o + 0] = v;
+                rgba[o + 1] = v;
+                rgba[o + 2] = v;
+                rgba[o + 3] = 255;
+            }
+        } else {
+            // -------- Hue visualization path --------
+            for (let i = 0; i < width * height; i++) {
+                const v = Math.max(0, Math.min(1, luma[i]));
+                const hue = v * 360.0;
+    
+                const [r, g, b] = StructurePass.hsvToRgb(hue, 1.0, 1.0);
+    
+                const o = i * 4;
+                rgba[o + 0] = r;
+                rgba[o + 1] = g;
+                rgba[o + 2] = b;
+                rgba[o + 3] = 255;
+            }
         }
-
-        // 2. Create or update texture
+    
+        // Upload texture
         gl.bindTexture(gl.TEXTURE_2D, renderTarget.texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-
+    
         gl.texImage2D(
             gl.TEXTURE_2D,
             0,
@@ -314,20 +346,42 @@ outColor = texture(u_input, v_uv);
             gl.UNSIGNED_BYTE,
             rgba
         );
-
-        // 3. Bind framebuffer (null = screen)
+    
+        // Draw fullscreen quad
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, width, height);
-
-        // 4. Draw fullscreen quad
+    
         gl.useProgram(programInfo.program);
-
+    
         twgl.setBuffersAndAttributes(gl, programInfo, this.quadBufferInfo);
         twgl.setUniforms(programInfo, {
             u_input: renderTarget.texture,
         });
-
+    
         twgl.drawBufferInfo(gl, this.quadBufferInfo);
+    }
+    
+
+    static hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+        const c = v * s;
+        const hp = h / 60;
+        const x = c * (1 - Math.abs((hp % 2) - 1));
+    
+        let r = 0, g = 0, b = 0;
+    
+        if (hp < 1)      [r, g, b] = [c, x, 0];
+        else if (hp < 2) [r, g, b] = [x, c, 0];
+        else if (hp < 3) [r, g, b] = [0, c, x];
+        else if (hp < 4) [r, g, b] = [0, x, c];
+        else if (hp < 5) [r, g, b] = [x, 0, c];
+        else             [r, g, b] = [c, 0, x];
+    
+        const m = v - c;
+        return [
+            Math.round((r + m) * 255),
+            Math.round((g + m) * 255),
+            Math.round((b + m) * 255),
+        ];
     }
 
 

@@ -7,4 +7,5 @@ export interface Metadata{
     nextContinuityScoreIndex: number;
     magnitude: number;
     score: number;
+    dogPercentile: number;
 }

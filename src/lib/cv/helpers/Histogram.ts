@@ -99,4 +99,31 @@ export class Histogram {
         // Fallback (should not happen)
         return this.maxValue;
     }
+
+    public getValuePercentile(value: number): number {
+        if (this.valueIndex === 0) {
+            return 0;
+        }
+    
+        // Handle degenerate case
+        if (this.minValue === this.maxValue) {
+            return value < this.minValue ? 0 : 1;
+        }
+    
+        // Clamp value into histogram range
+        const v = Math.min(Math.max(value, this.minValue), this.maxValue);
+    
+        const invRange = 1.0 / (this.maxValue - this.minValue);
+    
+        let bucket =
+            Math.floor(
+                (v - this.minValue) * invRange * (this.bucketCount - 1)
+            );
+    
+        // Safety clamp
+        if (bucket < 0) bucket = 0;
+        if (bucket >= this.bucketCount) bucket = this.bucketCount - 1;
+    
+        return this.scale[bucket];
+    }
 }
