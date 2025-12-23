@@ -10,7 +10,6 @@ import { draw } from 'svelte/transition';
 import { type Metadata } from './metadata';
 import { ContinuityScore } from '../../models/ContinuityScore';
 import { DifferenceOfGaussians } from '../../models/DifferenceOfGaussians';
-import { Countdown } from '../../helpers/Countdown';
 import { ShaderDataConverter } from '../../helpers/ShaderDataConverter';
 import { Histogram } from '../../helpers/Histogram';
 
@@ -22,18 +21,6 @@ export class StructurePass extends PassBase {
 
     private sobelVectorsProgramInfo: twgl.ProgramInfo;
     private sobelVectorsRenderTarget: RenderTarget2D;
-
-
-    private dogProgramInfo: twgl.ProgramInfo;
-    private dogRenderTarget: RenderTarget2D;
-    private currentSigmaSmall: number = -1;
-    private currentSigmaLarge: number = -1;
-    private currentSigmaSmallWeights: Float32Array = new Float32Array(19);
-    private currentSigmaLargeWeights: Float32Array = new Float32Array(19);
-    private dogRGBAData: Uint8Array = new Uint8Array();
-    private dogHistogram: Histogram = new Histogram(256, 0);
-    private dogCountdown: Countdown;
-    private dogPercentileThreshold: number = 0.0;
 
     private neighborScoringProgramInfo: twgl.ProgramInfo;
     private neighborScoringRenderTarget: RenderTarget2D;
@@ -73,13 +60,6 @@ outColor = texture(u_input, v_uv);
         this.sobelVectorsProgramInfo = this.createProgramInfo(sobelVectorsFrag);
         this.sobelVectorsRenderTarget = RenderTarget2D.createRGBA8(gl);
 
-        this.dogProgramInfo = this.createProgramInfo(dogFrag);
-        this.dogRenderTarget = RenderTarget2D.createRGBA8(gl);
-
-        this.checkAndUpdateGaussianWeights();
-
-        this.dogCountdown = new Countdown(30, this.recalculateDoGPercentiles.bind(this));
-
         this.neighborScoringProgramInfo = this.createProgramInfo(neighborScoringFrag);
         this.neighborScoringRenderTarget = RenderTarget2D.createRGBA8(gl);
 
@@ -94,33 +74,48 @@ outColor = texture(u_input, v_uv);
         }
         this.executeProgram(this.sobelGradientsProgramInfo, renderTargetIn, this.sobelGradientsRenderTarget);
         this.executeProgram(this.sobelVectorsProgramInfo, this.sobelGradientsRenderTarget, this.sobelVectorsRenderTarget);
-        this.executeDifferenceOfGaussians();
         this.executeNeighborScoring();
         this.buildMetadata();
         this.drawJunk(this.neighborScoringRenderTarget.framebufferInfo.width, this.neighborScoringRenderTarget.framebufferInfo.height);
-        return this.dogRenderTarget;
+        return this.neighborScoringRenderTarget;
     }
 
+
     private drawJunk(width: number, height: number): void {
+        let count = 0;
+        this.metadata.sort((a, b) => {
+            const dc = b.continuityScore.score - a.continuityScore.score;
+            if (Math.abs(dc) > 0.01) return dc;
+            return b.magnitude - a.magnitude;
+        });
+        
         const lumaArray = new Float32Array(this.metadata.length);
-        for (const meta of this.metadata) {
-            lumaArray[meta.index] = meta.dogPercentile * .999;
-            //lumaArray[meta.index] = meta.magnitude * .999;
-            //lumaArray[meta.index] = meta.continuityScore.score * .999;
-            //lumaArray[meta.index] = meta.score * .999;
+        
+        for (let i = 0; i < this.metadata.length; i++) {
+            const seed = this.metadata[i];
+        
+            if (seed.visited) continue;
+            if (seed.continuityScore.score < 0.8) break;
+        
+            let cur = seed;
+        
+            while (
+                cur &&
+                !cur.visited &&
+                cur.continuityScore.score > 0.5 &&
+                cur.magnitude > 0.04
+            ) {
+                cur.visited = true;
+                lumaArray[cur.index] = cur.magnitude;
+                count++;
+        
+                const nextIdx = cur.nextContinuityScoreIndex;
+                if (nextIdx < 0) break;
+        
+                cur = this.metadata[nextIdx];
+            }
         }
-        // const best = 
-        //     this.metadata.slice()
-        //     .filter((p) => p.score > .1)
-        //     .sort((a, b) => b.score - b.score);
-        // for (let i = 0; i < 50000; i++) {
-        //     let current = best[i];
-        //     let count = 100;
-        //     while (count-- > 0 && current && current.score > .1) {
-        //         lumaArray[current.index] = 1.0;
-        //         current = this.metadata[current.nextContinuityScoreIndex!];
-        //     }
-        // }
+        console.log(`StructurePass: drew ${count} pixels in structure lines`);
         this.drawLumaArray(
             this.gl,
             this.debugProgramInfo,
@@ -128,32 +123,11 @@ outColor = texture(u_input, v_uv);
             width,
             height,
             lumaArray,
-            true
+            false
         );
     }
 
-    private checkAndUpdateGaussianWeights() {
-        const settings = this.settings as StructurePassSettings;
-        if (this.currentSigmaSmall !== settings.sigmaSmall) {
-            this.currentSigmaSmall = settings.sigmaSmall;
-            this.currentSigmaSmallWeights = DifferenceOfGaussians.calculateGaussianWeights(settings.sigmaSmall, 19);
-        }
-        if (this.currentSigmaLarge !== settings.sigmaLarge) {
-            this.currentSigmaLarge = settings.sigmaLarge;
-            this.currentSigmaLargeWeights = DifferenceOfGaussians.calculateGaussianWeights(settings.sigmaLarge, 19);
-        }
-    }
-
-    private executeDifferenceOfGaussians(): void {
-        this.settings.uniforms['u_sigmaSmallWeights'] = this.currentSigmaSmallWeights;
-        this.settings.uniforms['u_sigmaLargeWeights'] = this.currentSigmaLargeWeights;
-        this.executeProgram(this.dogProgramInfo, this.sobelGradientsRenderTarget, this.dogRenderTarget);
-        this.dogCountdown.tick(); // periodically recalc DoG percentiles
-    }
-
     private executeNeighborScoring(): void {
-        this.settings.uniforms['u_dogThreshold'] = this.dogPercentileThreshold;
-        this.settings.uniforms['u_dogs'] = this.dogRenderTarget.texture;
         this.executeProgram(this.neighborScoringProgramInfo, this.sobelVectorsRenderTarget, this.neighborScoringRenderTarget);
         const width = this.neighborScoringRenderTarget.framebufferInfo.width;
         const height = this.neighborScoringRenderTarget.framebufferInfo.height;
@@ -169,25 +143,6 @@ outColor = texture(u_input, v_uv);
             const a = this.neighborScoringRGBAData[rgbaIndex + 3];
             this.continuityScores[i] = new ContinuityScore(r, g, b, a);
         }
-    }
-
-    private recalculateDoGPercentiles(): void {
-        const width = this.dogRenderTarget.framebufferInfo.width;
-        const height = this.dogRenderTarget.framebufferInfo.height;
-        this.dogRGBAData = this.readRGBA8Framebuffer(this.gl, this.dogRenderTarget.framebufferInfo.framebuffer, width, height, this.dogRGBAData);
-
-        this.dogHistogram.reset(width * height);
-        for (let i = 0; i < width * height; i++) {
-            const rgbaIndex = i * 4;
-            const r = this.dogRGBAData[rgbaIndex + 0];
-            const g = this.dogRGBAData[rgbaIndex + 1];
-            const b = this.dogRGBAData[rgbaIndex + 2];
-            const a = this.dogRGBAData[rgbaIndex + 3];
-            const dog = ShaderDataConverter.unpackFloat32FromRGBA8(r, g, b, a);
-            this.dogHistogram.addValue(dog);
-        }
-        this.dogHistogram.calculate();
-        this.dogPercentileThreshold = this.dogHistogram.getPercentile(0.1);
     }
 
     private buildMetadata() {
@@ -230,20 +185,13 @@ outColor = texture(u_input, v_uv);
                 }
             }
 
-            const dog = ShaderDataConverter.unpackFloat32FromRGBA8(
-                this.dogRGBAData[rgbaIndex + 0],
-                this.dogRGBAData[rgbaIndex + 1],
-                this.dogRGBAData[rgbaIndex + 2],
-                this.dogRGBAData[rgbaIndex + 3]
-            );
-
             this.metadata[i] = {
                 index: i,
+                visited: false,
                 continuityScore: cs,
                 nextContinuityScoreIndex: nextIndex,
                 magnitude,
-                score: cs.score * magnitude,
-                dogPercentile: this.dogHistogram.getValuePercentile(dog)
+                score: cs.score * magnitude
             };
             // let maxMagnitude = 0;
             // let minMagnitude = Number.POSITIVE_INFINITY;
@@ -304,7 +252,7 @@ outColor = texture(u_input, v_uv);
         showHue: boolean = false
     ) {
         const rgba = new Uint8Array(width * height * 4);
-    
+
         if (!showHue) {
             // -------- Grayscale path --------
             for (let i = 0; i < width * height; i++) {
@@ -320,9 +268,9 @@ outColor = texture(u_input, v_uv);
             for (let i = 0; i < width * height; i++) {
                 const v = Math.max(0, Math.min(1, luma[i]));
                 const hue = v * 360.0;
-    
+
                 const [r, g, b] = StructurePass.hsvToRgb(hue, 1.0, 1.0);
-    
+
                 const o = i * 4;
                 rgba[o + 0] = r;
                 rgba[o + 1] = g;
@@ -330,11 +278,11 @@ outColor = texture(u_input, v_uv);
                 rgba[o + 3] = 255;
             }
         }
-    
+
         // Upload texture
         gl.bindTexture(gl.TEXTURE_2D, renderTarget.texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    
+
         gl.texImage2D(
             gl.TEXTURE_2D,
             0,
@@ -346,36 +294,36 @@ outColor = texture(u_input, v_uv);
             gl.UNSIGNED_BYTE,
             rgba
         );
-    
+
         // Draw fullscreen quad
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, width, height);
-    
+
         gl.useProgram(programInfo.program);
-    
+
         twgl.setBuffersAndAttributes(gl, programInfo, this.quadBufferInfo);
         twgl.setUniforms(programInfo, {
             u_input: renderTarget.texture,
         });
-    
+
         twgl.drawBufferInfo(gl, this.quadBufferInfo);
     }
-    
+
 
     static hsvToRgb(h: number, s: number, v: number): [number, number, number] {
         const c = v * s;
         const hp = h / 60;
         const x = c * (1 - Math.abs((hp % 2) - 1));
-    
+
         let r = 0, g = 0, b = 0;
-    
-        if (hp < 1)      [r, g, b] = [c, x, 0];
+
+        if (hp < 1) [r, g, b] = [c, x, 0];
         else if (hp < 2) [r, g, b] = [x, c, 0];
         else if (hp < 3) [r, g, b] = [0, c, x];
         else if (hp < 4) [r, g, b] = [0, x, c];
         else if (hp < 5) [r, g, b] = [x, 0, c];
-        else             [r, g, b] = [c, 0, x];
-    
+        else[r, g, b] = [c, 0, x];
+
         const m = v - c;
         return [
             Math.round((r + m) * 255),
