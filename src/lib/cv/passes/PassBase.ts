@@ -39,9 +39,9 @@ export abstract class PassBase {
 
         //make sure the output render target is the correct size
         if (renderTargetOut && !outboundTargetHasExplicitSize) {
-            if (renderTargetOut.framebufferInfo.width !== this.gl.canvas.width ||
-                renderTargetOut.framebufferInfo.height !== this.gl.canvas.height) {
-                renderTargetOut.resize(this.gl.canvas.width, this.gl.canvas.height);
+            if (renderTargetOut.framebufferInfo.width !== renderTargetIn.framebufferInfo.width ||
+                renderTargetOut.framebufferInfo.height !== renderTargetIn.framebufferInfo.height) {
+                renderTargetOut.resize(renderTargetIn.framebufferInfo.width, renderTargetIn.framebufferInfo.height);
             }
         }
         
