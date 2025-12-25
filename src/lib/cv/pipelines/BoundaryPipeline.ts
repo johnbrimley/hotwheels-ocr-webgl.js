@@ -9,6 +9,8 @@ import { StructurePass } from "../passes/structure/StructurePass";
 import { StructurePassSettings } from "../passes/structure/StructurePassSettings";
 import { TemporalPass } from "../passes/temporal/TemporalPass";
 import { TemporalPassSettings } from "../passes/temporal/TemporalPassSettings";
+import { DownscalePass } from "../passes/downscale/DownscalePass";
+import { PassSettingsBase } from "../passes/PassSettingsBase";
 import { RayBoxPass } from "../passes/ray-box/RayBoxPass";
 import { RayBoxPassSettings } from "../passes/ray-box/RayBoxPassSettings";
 import type { Box } from "../../geometry/Box";
@@ -47,6 +49,9 @@ export class BoundaryPipeline extends ComputerVisionPipeline<BoundaryOutput> {
     bilateralSettings.sigmaRange = 0.1
     const bilateral = new BilateralPass(this.gl, bilateralSettings)
 
+    const downscaleSettings = new PassSettingsBase()
+    const downscale = new DownscalePass(this.gl, downscaleSettings)
+
     const structureSettings = new StructurePassSettings()
     structureSettings.sigmaSmall = 1.4
     structureSettings.sigmaLarge = 2.8
@@ -64,6 +69,7 @@ export class BoundaryPipeline extends ComputerVisionPipeline<BoundaryOutput> {
       { id: 'orientation', label: 'Orientation', required: false, pass: orientation },
       { id: 'temporal', label: 'Temporal Median', required: false, pass: temporal },
       { id: 'bilateral', label: 'Bilateral', required: false, pass: bilateral },
+      { id: 'downscale', label: 'Downscale', required: false, pass: downscale },
       { id: 'sobel', label: 'Structure', required: false, pass: structure },
       { id: 'ray-box', label: 'Ray Box', required: false, pass: this.rayBoxPass },
     ]

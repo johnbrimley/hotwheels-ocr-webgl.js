@@ -8,6 +8,8 @@
   import type { BilateralPassSettings } from './lib/cv/passes/bilateral/BilateralPassSettings'
   import StructureSettings from './lib/ui/settings/StructureSettings.svelte'
   import type { StructurePassSettings } from './lib/cv/passes/structure/StructurePassSettings'
+  import DownscaleSettings from './lib/ui/settings/DownscaleSettings.svelte'
+  import type { PassSettingsBase } from './lib/cv/passes/PassSettingsBase'
   import MagnatudeGateSettings from './lib/ui/settings/MagnatudeGateSettings.svelte'
   import type { MagnatudeGatePassSettings } from './lib/cv/passes/magnatude-gate/MagnatudeGatePassSettings'
   import TemporalSettings from './lib/ui/settings/TemporalSettings.svelte'
@@ -28,6 +30,7 @@
     'rec709-luma': Rec709Settings,
     bilateral: BilateralSettings,
     sobel: StructureSettings,
+    downscale: DownscaleSettings,
     'magnatude-gate': MagnatudeGateSettings,
     temporal: TemporalSettings,
     'ray-box': RayBoxSettings,
@@ -249,6 +252,8 @@
       {#if passDef && SettingsComponent && settings}
         {#if passDef.id === 'bilateral'}
           <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as BilateralPassSettings} />
+        {:else if passDef.id === 'downscale'}
+          <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as PassSettingsBase} />
         {:else if passDef.id === 'sobel'}
           <svelte:component this={SettingsComponent} required={passDef.required} settings={settings as StructurePassSettings} />
         {:else if passDef.id === 'orientation'}

@@ -17,6 +17,9 @@
       "sigmaSpatial": 2.0,
       "sigmaRange": 0.1
     },
+    "downscale": {
+      "enabled": true
+    },
     "sobel": {
       "enabled": false,
       "sigmaSmall": 1.4,

@@ -104,8 +104,8 @@ outColor = texture(u_input, v_uv);
             this.gl,
             this.debugProgramInfo,
             this.debugRenderTarget,
-            640,
-            480,
+            this.sobelMagnitudeRenderTarget.framebufferInfo.width,
+            this.sobelMagnitudeRenderTarget.framebufferInfo.height,
             lumaBuffer
         );
 
@@ -175,6 +175,11 @@ outColor = texture(u_input, v_uv);
         luma: Float32Array | number[],
         showHue: boolean = false
     ) {
+        if(this.gl.canvas.width !== width || this.gl.canvas.height !== height){
+            this.gl.canvas.width = width;
+            this.gl.canvas.height = height;
+        }
+
         const rgba = new Uint8Array(width * height * 4);
 
         if (!showHue) {
