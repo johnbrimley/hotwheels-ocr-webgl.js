@@ -34,8 +34,8 @@ export class DownscalePass extends PassBase {
         let outputTarget = this.downscaleRenderTargetPong;
 
         let smallestDimension = Math.min(renderTargetIn.framebufferInfo.width, renderTargetIn.framebufferInfo.height);
-        this.downscaleRenderTargetPing.resize(smallestDimension, smallestDimension);
-        this.executeProgram(this.cropProgramInfo, renderTargetIn, smallestDimension <=  DownscalePass.DOWNSCALE_LIMIT ? null : inputTarget, true);
+        inputTarget.resize(smallestDimension, smallestDimension);
+        this.executeProgram(this.cropProgramInfo, renderTargetIn, smallestDimension <=  DownscalePass.DOWNSCALE_LIMIT && applyToScreen ? null : inputTarget, true);
 
         while(smallestDimension > DownscalePass.DOWNSCALE_LIMIT){
             //horizontal downscale
